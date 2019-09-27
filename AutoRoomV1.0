@@ -1,0 +1,171 @@
+#include <ESP8266WiFi.h>
+#include "AdafruitIO_WiFi.h"
+#include <BlynkSimpleEsp8266.h>
+#ifndef UNIT_TEST
+#include <Arduino.h>
+#endif
+#include <IRremoteESP8266.h>
+#include <IRrecv.h>
+#include <IRutils.h>
+#define WIFI_SSID       "SSID"
+#define WIFI_PASS       "PASS"
+#define IO_USERNAME     "USER"
+#define IO_KEY          "AIO"
+#define auth            "AUTH"
+#define ssid            "SSID"
+#define pass            "PASS"
+const uint16_t kRecvPin = 13;
+IRrecv irrecv(kRecvPin);
+decode_results results;
+int f, b, l, r, a, _f, _b, _l, _r, _s, _d, b1 = 0, b2 = 0, b3 = 0, b4 = 0, claps;
+long detectionSpanInitial = 0, detectionSpan = 0;
+AdafruitIO_WiFi IO(IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS);
+AdafruitIO_Feed *up = IO.feed("forward");
+AdafruitIO_Feed *dw = IO.feed("backward");
+AdafruitIO_Feed *le = IO.feed("left");
+AdafruitIO_Feed *ri = IO.feed("right");
+AdafruitIO_Feed *st = IO.feed("key");
+void FOR(AdafruitIO_Data *data) {
+  _f = data->toInt();
+  b1 = _f;
+}
+void BAC(AdafruitIO_Data *data) {
+  _b = data->toInt();
+  b2 = _b;
+}
+void LEF(AdafruitIO_Data *data) {
+  _l = data->toInt();
+  b3 = _l;
+}
+void RIG(AdafruitIO_Data *data) {
+  _r = data->toInt();
+  b4 = _r;
+}
+void STO(AdafruitIO_Data *data) {
+  _s = data->toInt();
+  if (_s)
+  {
+    st->save(0);
+    digitalWrite(D5, LOW);
+    Serial.println("STOP");
+    delay(500);
+  }
+}
+BLYNK_WRITE(V0)
+{
+  f = param.asInt();
+  if (f)
+    b1 = !b1;
+  up->save(b1);
+}
+BLYNK_WRITE(V1)
+{
+  b = param.asInt();
+  if (b)
+    b2 = !b2;
+  dw->save(b2);
+}
+BLYNK_WRITE(V2)
+{
+  l = param.asInt();
+  if (l)
+    b3 = !b3;
+  le->save(b3);
+}
+BLYNK_WRITE(V3)
+{
+  r = param.asInt();
+  if (r)
+    b4 = !b4;
+  ri->save(b4);
+}
+void Remote() {
+  if (irrecv.decode(&results)) {
+    int ir = results.value;
+    Serial.println(ir);
+    delay(200);
+    if (ir == 12583000 )
+    { b1 = !b1;
+      Serial.println("UP");
+    }
+    if (ir == 12583001 )
+    { b2 = !b2;
+      Serial.println("DOWN");
+    }
+    if (ir == 12583002)
+    { b3 = !b3;
+      Serial.println("LEFT");
+    }
+    if (ir == 12583003 )
+    { b4 = !b4;
+      Serial.println("RIGHT");
+    }
+    if (ir == 12583004 )
+    {
+      digitalWrite(D5, LOW);
+      Serial.println("STOP");
+      delay(500);
+    }
+    irrecv.resume();// Receive the next value
+  }
+}
+void setup() {
+  Serial.begin(9600);
+  pinMode(D0, OUTPUT);
+  pinMode(D1, OUTPUT);
+  pinMode(D2, OUTPUT);
+  pinMode(D3, OUTPUT);
+  pinMode(D5, OUTPUT);
+  digitalWrite(D0, LOW);
+  digitalWrite(D1, LOW);
+  digitalWrite(D2, LOW);
+  digitalWrite(D3, LOW);
+  digitalWrite(D5, HIGH);
+  b1 = 0; b2 = 0; b3 = 0; b4 = 0;
+  irrecv.enableIRIn();
+  IO.connect();
+  Serial.print("Connecting.");
+  while (IO.status() < AIO_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println("");
+  Serial.println(IO.statusText());
+  up->onMessage(FOR);
+  dw->onMessage(BAC);
+  le->onMessage(LEF);
+  ri->onMessage(RIG);
+  st->onMessage(STO);
+  Blynk.begin(auth, ssid, pass);
+  up->save(b1);
+  dw->save(b2);
+  le->save(b3);
+  ri->save(b4);
+  st->save(b4);
+}
+void loop() {
+  Remote();
+  if (IO.status() < AIO_CONNECTED) {
+    IO.connect();
+    Serial.print("Connecting.");
+    while (IO.status() < AIO_CONNECTED) {
+      Serial.print(".");
+      Remote();
+      delay(250);
+    }
+  }
+  Blynk.run();
+  IO.run();
+  Serial.print(b1);
+  Serial.print("    ");
+  Serial.print(b2);
+  Serial.print("    ");
+  Serial.print(b3);
+  Serial.print("    ");
+  Serial.print(b4);
+  Serial.println("    ");
+  digitalWrite(D0, b1);
+  digitalWrite(D1, b2);
+  digitalWrite(D2, b3);
+  digitalWrite(D3, b4);
+}
